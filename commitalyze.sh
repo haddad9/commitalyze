@@ -6,14 +6,13 @@ OUTPUT_FILE="$WORK_DIR/index.html"
 COMMITS_FILE="$WORK_DIR/commits.html"
 LAST_RUN_FILE="$WORK_DIR/last_run_date.txt"
 GIT_DIR_SOURCE="" # Git repository target
-GIT_DIR_TARGET="" # Git repository source
-API_TOKEN="" # Put your API here
+GIT_DIR_TARGET="" # Git repository target
+API_TOKEN="" # put your LLM api token here 
 PROMPT_FILE="./prompt.txt"
 PROMPT=$(cat "$PROMPT_FILE")
-CUSTOM_DATE='2024-12-24 00:00:00' # choose your custom date to start
-BRANCH_TARGET="" # branch name of the target (e.g "main")
-BRANCH_SOURCE="" # branch name of the source
-
+CUSTOM_DATE='' # put your custom date to start
+BRANCH_TARGET='' # branch name for target git dir (e.g 'main')
+BRANCH_SOURCE='' # branch name for source git dir (e.g 'main')
 
 # get the last run date and backup previous index.html
 if [[  -s "$LAST_RUN_FILE" ]]; then
@@ -157,28 +156,29 @@ echo "$CURRENT_DATE" > "$LAST_RUN_FILE"
 
 echo "Commits from $LAST_RUN_DATE to $CURRENT_DATE have been processed."
 
-
+set -x
 echo "Anaylzing implemented commits from SOURCE to the TARGET"
-# Compare commits from target branch that already exist in the source branch
+
+# Define the file to log migrated commits
 MIGRATED_FILE="$WORK_DIR/migrated.md"
-echo "# Migrated Commits from Target to Source" > "$MIGRATED_FILE"
-echo "Analyzing implemented commits from $BRANCH_TARGET (Target) to $BRANCH_SOURCE (Source)" >> "$MIGRATED_FILE"
+echo "# Migrated Commits from Source to Target" > "$MIGRATED_FILE"
+echo "Commits from $BRANCH_SOURCE (Source) already implemented in $BRANCH_TARGET (Target)" >> "$MIGRATED_FILE"
+echo "Analyzing commits from $LAST_RUN_DATE to $CURRENT_DATE" >> "$MIGRATED_FILE"
 echo "" >> "$MIGRATED_FILE"
 
-# Get commit hashes from the target branch
-TARGET_COMMITS=$(git -C $GIT_DIR_TARGET log $BRANCH_TARGET --pretty=format:"%H")
+# Get the commit messages from the source branch within the designated range
+SOURCE_COMMIT_MESSAGES=$(git -C $GIT_DIR_SOURCE log $BRANCH_SOURCE --since="$LAST_RUN_DATE" --until="$CURRENT_DATE" --pretty=format:"%s")
 
-# Loop through each commit in the target branch
-echo "$TARGET_COMMITS" | while read -r commit; do
-    # Check if the commit exists in the source branch
-    if git -C $GIT_DIR_SOURCE branch --contains "$commit" | grep -q "$BRANCH_SOURCE"; then
-        # Get the commit message
-        commit_message=$(git -C $GIT_DIR_TARGET log -1 --pretty=format:"%s" "$commit")
-        # Append the commit hash and message to the migrated file
-        echo "- **Commit:** $commit" >> "$MIGRATED_FILE"
-        echo "  **Message:** $commit_message" >> "$MIGRATED_FILE"
-        echo "" >> "$MIGRATED_FILE"
+# Loop through each commit message in the source branch
+echo "$SOURCE_COMMIT_MESSAGES" | while read -r commit_message; do
+    # Check if the commit message exists in the target branch
+    if git -C $GIT_DIR_TARGET log $BRANCH_TARGET --pretty=format:"%s" | grep -Fxq "$commit_message"; then
+        # Check if the commit message is already in the migrated file
+        if ! grep -Fq "- $commit_message" "$MIGRATED_FILE"; then
+            # Get the commit date from the source branch
+            commit_date=$(git -C $GIT_DIR_SOURCE log --grep="^$commit_message$" --pretty=format:"%ad" --date=short -1)
+            # Append the formatted log to the migrated file
+            echo "- $commit_message ($commit_date)" >> "$MIGRATED_FILE"
+        fi
     fi
 done
-
-echo "Analysis of migrated commits has been written to $MIGRATED_FILE."
