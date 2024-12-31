@@ -3,7 +3,7 @@
 ## Usage
 - Put your API_KEY in the file
 - Specify the git directory you want to analyze in GIT_DIR
-- Run the script `./analyze.sh`
+- Run the script `./commitalyze.sh`
 
 ## Generated files
 - `index.html` : Files with the the list of commits with each classification and the details
